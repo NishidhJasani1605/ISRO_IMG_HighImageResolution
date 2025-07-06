@@ -32,6 +32,17 @@ This project implements a state-of-the-art super-resolution model for enhancing 
 └── README.md
 ```
 
+## Dataset
+
+The project uses the PROBA-V Super-Resolution dataset from ESA's Kelvins competition. The dataset contains satellite data from 74 hand-selected regions around the globe at different points in time, consisting of:
+- 300m resolution data (128x128 pixels)
+- 100m resolution data (384x384 pixels)
+- Quality maps for cloud/ice/water masking
+
+You can download the dataset from [Zenodo](https://zenodo.org/records/6327426).
+
+Place the downloaded data in the `probav_data` directory following the structure shown above.
+
 ## Installation
 
 1. Create a virtual environment:
@@ -60,7 +71,6 @@ pip install -r requirements.txt
 ```bash
 python src/train.py
 ```
-
 ## Training Features
 
 - **Model Ensemble**: Trains multiple models in parallel and averages predictions
