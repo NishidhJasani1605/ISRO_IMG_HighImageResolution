@@ -1,0 +1,56 @@
+data:
+  root_dir: "probav_data"
+  train_dir: "train"
+  test_dir: "test"
+  norm_file: "norm.csv"
+  patch_size: 256  # Larger patches for better context
+  scale_factor: 3
+  batch_size: 4  # Reduced for larger patches and model
+  num_workers: 8  # Increased for faster data loading
+  spectral_band: "RED"  # or "NIR"
+
+model:
+  in_channels: 1
+  base_channels: 256  # Increased for more capacity
+  num_blocks: 16  # More residual blocks
+  num_heads: 16  # More attention heads
+  transformer_layers: 12  # Deeper transformer
+  dropout: 0.05  # Reduced dropout for larger model
+  attention_dropout: 0.05
+
+training:
+  num_epochs: 500  # Extended training
+  learning_rate: 5e-5  # Lower initial learning rate
+  weight_decay: 2e-5  # Adjusted weight decay
+  checkpoint_interval: 10
+  log_interval: 50
+  validation_interval: 1
+  early_stopping_patience: 50  # Increased patience
+  grad_clip: 0.5  # Tighter gradient clipping
+  warmup_epochs: 20  # Extended warmup
+  label_smoothing: 0.05  # Reduced for precision
+  mixup_alpha: 0.1  # Reduced for stability
+  cutmix_prob: 0.2
+  ema_decay: 0.9999  # Higher EMA decay
+  fp16_precision: true
+  cosine_annealing: true
+  T_max: 100  # Cosine annealing period
+  eta_min: 1e-7  # Minimum learning rate
+
+logging:
+  project_name: "probav_sr"
+  run_name: "advanced_training"
+  log_dir: "logs"
+  checkpoint_dir: "checkpoints"
+
+augmentation:
+  random_crop: true
+  random_flip: true
+  random_rotate: true
+  color_jitter:
+    brightness: 0.2
+    contrast: 0.2
+    saturation: 0.2
+    hue: 0.1
+  gaussian_noise: 0.01
+  random_erasing: 0.5 
