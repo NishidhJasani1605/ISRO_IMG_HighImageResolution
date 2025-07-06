@@ -14,31 +14,43 @@ import wandb
 from tqdm import tqdm
 import yaml
 import random
+from dotenv import load_dotenv
 from torch.optim.swa_utils import AveragedModel, SWALR
 import kornia.augmentation as K
+from kornia.metrics import ssim
 from torch.optim.lr_scheduler import OneCycleLR, CosineAnnealingLR, ReduceLROnPlateau
 from torch.optim.swa_utils import AveragedModel, SWALR, update_bn
 
 from models.transformer_sr import SatelliteSR, CustomLoss
 from data.probav_dataset import create_probav_dataloaders
 
+# Load environment variables
+load_dotenv()
+
 class AdvancedLoss(nn.Module):
     def __init__(self):
         super().__init__()
         self.l1_loss = nn.L1Loss()
         self.mse_loss = nn.MSELoss()
-        self.ssim = K.SSIM(window_size=11, reduction='mean')
         
         # Load VGG for perceptual loss (if available)
         try:
             import torchvision.models as models
-            vgg = models.vgg19(pretrained=True).features[:35].eval()
+            vgg = models.vgg19(weights='IMAGENET1K_V1').features[:35].eval()
             for param in vgg.parameters():
                 param.requires_grad = False
             self.vgg = vgg.cuda() if torch.cuda.is_available() else vgg
         except:
             self.vgg = None
             print("Warning: VGG19 not available for perceptual loss")
+    
+    def ssim_loss(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """Compute SSIM loss"""
+        return 1.0 - ssim(pred.unsqueeze(1), 
+                         target.unsqueeze(1), 
+                         window_size=11, 
+                         max_val=1.0,
+                         reduction='mean')
         
     def spectral_loss(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         """Compute spectral loss using FFT"""
@@ -76,7 +88,7 @@ class AdvancedLoss(nn.Module):
         mse = self.mse_loss(pred * quality_mask, target * quality_mask)
         
         # SSIM loss
-        ssim_loss = 1 - self.ssim(pred.unsqueeze(1), target.unsqueeze(1))
+        ssim_loss = self.ssim_loss(pred, target)
         
         # Perceptual loss
         perceptual_loss = torch.tensor(0., device=pred.device)
@@ -121,12 +133,13 @@ class AdvancedTrainer:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.setup_distributed()
         
-        # Initialize multiple models for ensemble
+        # Initialize models, optimizers, and schedulers
         self.models = []
         self.optimizers = []
         self.schedulers = []
         
-        for i in range(config['training']['num_models']):
+        # Create model ensemble
+        for _ in range(3):  # Using 3 models for ensemble
             model = SatelliteSR(
                 in_channels=config['model']['in_channels'],
                 scale_factor=config['data']['scale_factor'],
@@ -135,7 +148,6 @@ class AdvancedTrainer:
                 num_heads=config['model']['num_heads'],
                 transformer_layers=config['model']['transformer_layers']
             )
-            
             if self.distributed:
                 model = DDP(model, device_ids=[self.local_rank])
             else:
@@ -143,10 +155,14 @@ class AdvancedTrainer:
             
             self.models.append(model)
             
+            # Parse learning rate and weight decay as float
+            lr = float(config['training']['learning_rate'])
+            weight_decay = float(config['training']['weight_decay'])
+            
             optimizer = optim.AdamW(
                 model.parameters(),
-                lr=config['training']['learning_rate'],
-                weight_decay=config['training']['weight_decay'],
+                lr=lr,
+                weight_decay=weight_decay,
                 betas=(0.9, 0.999)
             )
             
@@ -155,12 +171,12 @@ class AdvancedTrainer:
                 scheduler = CosineAnnealingLR(
                     optimizer,
                     T_max=config['training'].get('T_max', 100),
-                    eta_min=config['training'].get('eta_min', 1e-7)
+                    eta_min=float(config['training'].get('eta_min', 1e-7))
                 )
             else:
                 scheduler = OneCycleLR(
                     optimizer,
-                    max_lr=config['training']['learning_rate'],
+                    max_lr=lr,
                     epochs=config['training']['num_epochs'],
                     steps_per_epoch=config['training']['steps_per_epoch'],
                     pct_start=0.3,
@@ -174,14 +190,14 @@ class AdvancedTrainer:
         self.swa_model = AveragedModel(self.models[0])
         self.swa_scheduler = SWALR(
             self.optimizers[0],
-            swa_lr=config['training']['swa_lr']
+            swa_lr=float(config['training'].get('swa_lr', 1e-6))
         )
         
         # Advanced loss function
         self.criterion = AdvancedLoss().to(self.device)
         
         # Mixed precision training
-        self.scaler = GradScaler()
+        self.scaler = GradScaler(enabled=torch.cuda.is_available())
         
         # Advanced augmentations
         self.augmentations = nn.Sequential(
@@ -195,7 +211,8 @@ class AdvancedTrainer:
         # Initialize logging
         if self.is_main_process:
             self.setup_logging()
-            self.setup_wandb()
+            if not config.get('disable_wandb', False):
+                self.setup_wandb()
             
         # Curriculum learning parameters
         self.curriculum_step = 0
@@ -233,12 +250,18 @@ class AdvancedTrainer:
         )
         
     def setup_wandb(self):
-        """Initialize Weights & Biases logging"""
-        wandb.init(
-            project=self.config['logging']['project_name'],
-            name=self.config['logging']['run_name'],
-            config=self.config
-        )
+        """Initialize Weights & Biases logging with API key from environment"""
+        wandb_api_key = os.getenv('WANDB_API_KEY')
+        if wandb_api_key:
+            wandb.login(key=wandb_api_key)
+            wandb.init(
+                project=self.config['logging']['project_name'],
+                name=self.config['logging']['run_name'],
+                config=self.config
+            )
+        else:
+            logging.warning("WANDB_API_KEY not found in environment variables. Skipping wandb initialization.")
+            self.config['disable_wandb'] = True
         
     def train_epoch(self, dataloader: DataLoader, epoch: int) -> Tuple[float, float]:
         """Enhanced training for one epoch with curriculum learning and ensemble"""

@@ -3,7 +3,7 @@ from torch.utils.data import Dataset
 import numpy as np
 import os
 from pathlib import Path
-import h5py
+import cv2
 import pandas as pd
 from typing import Tuple, List, Optional
 from .image_preprocessor import SatelliteImagePreprocessor
@@ -43,21 +43,22 @@ class ProbaVDataset(Dataset):
         
         # Get all image sets
         self.image_sets = self._get_image_sets()
+        print(f"Found {len(self.image_sets)} image sets in {self.data_dir}")
         
     def _get_image_sets(self) -> List[str]:
-        """Get list of all image set IDs"""
+        """Get list of all image set directories"""
         image_sets = []
-        for f in self.data_dir.glob('*_LR.h5'):
-            img_id = f.name.split('_')[0]
-            if (self.data_dir / f'{img_id}_HR.h5').exists():
-                image_sets.append(img_id)
-        return image_sets
+        for img_dir in self.data_dir.glob('imgset*'):
+            if img_dir.is_dir():
+                # Check if directory contains both LR and HR data
+                if (img_dir / 'HR.png').exists() and list(img_dir.glob('LR*.png')):
+                    image_sets.append(img_dir.name)
+        return sorted(image_sets)
     
-    def _load_h5_data(self, h5_path: Path) -> np.ndarray:
-        """Load data from H5 file"""
-        with h5py.File(h5_path, 'r') as f:
-            data = f['data'][:]
-        return data
+    def _load_png_data(self, png_path: Path) -> np.ndarray:
+        """Load data from PNG file"""
+        img = cv2.imread(str(png_path), cv2.IMREAD_GRAYSCALE)
+        return img.astype(np.float32) / 255.0  # Normalize to [0, 1]
     
     def _normalize_data(self, data: np.ndarray, img_id: str) -> np.ndarray:
         """Normalize data using parameters from norm.csv"""
@@ -65,27 +66,33 @@ class ProbaVDataset(Dataset):
         data = (data - params['mean']) / params['std']
         return data
     
-    def _get_item_from_set(self, img_id: str) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _get_item_from_set(self, img_set: str) -> Tuple[torch.Tensor, torch.Tensor]:
         """Get LR and HR data for a specific image set"""
-        # Load LR and HR data
-        lr_path = self.data_dir / f'{img_id}_LR.h5'
-        hr_path = self.data_dir / f'{img_id}_HR.h5'
+        img_dir = self.data_dir / img_set
         
-        lr_data = self._load_h5_data(lr_path)  # Shape: (T, H, W)
-        hr_data = self._load_h5_data(hr_path)  # Shape: (H, W)
+        # Load HR data
+        hr_file = img_dir / 'HR.png'
+        hr_data = self._load_png_data(hr_file)
+        
+        # Load LR data (select two best quality images)
+        lr_files = sorted(img_dir.glob('LR*.png'))
+        lr_data = []
+        quality_masks = []
+        
+        for lr_file in lr_files[:2]:  # Take first two LR images
+            lr_img = self._load_png_data(lr_file)
+            qm_file = img_dir / f'QM{lr_file.stem[2:]}.png'
+            qm = self._load_png_data(qm_file) if qm_file.exists() else np.ones_like(lr_img)
+            
+            lr_data.append(lr_img)
+            quality_masks.append(qm)
         
         # Normalize data
-        lr_data = self._normalize_data(lr_data, img_id)
-        hr_data = self._normalize_data(hr_data, img_id)
-        
-        # Select two best LR images
-        if lr_data.shape[0] > 2:
-            # TODO: Implement quality-based selection
-            lr_data = lr_data[:2]
+        lr1 = self._normalize_data(lr_data[0], img_set)
+        lr2 = self._normalize_data(lr_data[1], img_set)
+        hr_data = self._normalize_data(hr_data, img_set)
         
         # Register LR images using enhanced preprocessing
-        lr1 = lr_data[0]
-        lr2 = lr_data[1]
         registered_lr1, registered_lr2, quality_mask = self.preprocessor.enhance_image_pair(lr1, lr2)
         
         # Convert to torch tensors
@@ -98,8 +105,8 @@ class ProbaVDataset(Dataset):
     
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
         """Get a training sample"""
-        img_id = self.image_sets[idx]
-        return self._get_item_from_set(img_id)
+        img_set = self.image_sets[idx]
+        return self._get_item_from_set(img_set)
     
     def __len__(self) -> int:
         return len(self.image_sets)
