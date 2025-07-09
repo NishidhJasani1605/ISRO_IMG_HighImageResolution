@@ -1,99 +1,161 @@
-# ISRO Satellite Image Super-Resolution
+# Dual Image Super-Resolution for Satellite Imagery
 
-This project implements a state-of-the-art super-resolution model for enhancing PROBA-V satellite imagery. The model uses an advanced transformer-based architecture with ensemble learning and quality-aware training to achieve high-quality image upscaling.
+A comprehensive project for super-resolution of satellite images using a hybrid classical + GAN pipeline with blind quality evaluation.
 
-## Features
+![Satellite Super-Resolution](app/flowchart.png)
 
-- Transformer-based super-resolution architecture
-- Model ensemble with Stochastic Weight Averaging (SWA)
-- Quality-aware training with mask-based loss
-- Advanced data augmentation pipeline
-- Mixed precision training
-- Curriculum learning
-- Test-time augmentation
-- Comprehensive logging with Weights & Biases
+## 📋 Project Overview
 
-## Project Structure
+This project enhances the resolution and quality of satellite imagery by using multiple low-resolution observations of the same area. By leveraging spatial correlations between images and combining classical computer vision techniques with deep learning, we produce higher-resolution outputs with improved detail and clarity.
 
-```
-.
-├── src/
-│   ├── data/
-│   │   └── probav_dataset.py    # Dataset loader
-│   ├── models/
-│   │   └── transformer_sr.py    # Model architecture
-│   └── train.py                 # Training script
-├── probav_data/
-│   ├── train/                   # Training data
-│   ├── test/                    # Test data
-│   └── norm.csv                 # Normalization parameters
-├── config.yaml                  # Configuration file
-├── requirements.txt             # Dependencies
-└── README.md
-```
+### Key Features
 
-## Dataset
+- **Dual-Image Processing**: Combines information from two low-resolution satellite images
+- **Sub-pixel Registration**: Precise alignment of input images using ECC and phase correlation
+- **GAN-based Super-Resolution**: Deep learning model for high-quality upscaling
+- **Blind Quality Assessment**: No-reference metrics (NIQE, BRISQUE) for quality evaluation
+- **Web Interface**: User-friendly Streamlit app for interactive processing
+- **Comprehensive Pipeline**: End-to-end solution from preprocessing to evaluation
 
-The project uses the PROBA-V Super-Resolution dataset from ESA's Kelvins competition. The dataset contains satellite data from 74 hand-selected regions around the globe at different points in time, consisting of:
-- 300m resolution data (128x128 pixels)
-- 100m resolution data (384x384 pixels)
-- Quality maps for cloud/ice/water masking
+## 🚀 Getting Started
 
-You can download the dataset from [Zenodo](https://zenodo.org/records/6327426).
+### Installation
 
-Place the downloaded data in the `probav_data` directory following the structure shown above.
-
-## Installation
-
-1. Create a virtual environment:
+1. Clone the repository:
 ```bash
-python -m venv venv
+git clone https://github.com/your-username/isro-sr-project.git
+cd isro-sr-project
 ```
 
-2. Activate the environment:
-```bash
-# Windows
-.\venv\Scripts\activate
-# Linux/Mac
-source venv/bin/activate
-```
-
-3. Install dependencies:
+2. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-## Usage
-
-1. Prepare your data in the `probav_data` directory
-2. Configure training parameters in `config.yaml`
-3. Start training:
+3. Install the package in development mode:
 ```bash
-python src/train.py
+pip install -e .
 ```
-## Training Features
 
-- **Model Ensemble**: Trains multiple models in parallel and averages predictions
-- **Advanced Loss**: Combines L1, MSE, and SSIM losses with quality-aware weighting
-- **Data Augmentation**: Comprehensive augmentation pipeline including:
-  - Random crops, flips, and rotations
-  - Color jittering
-  - Random erasing
-  - Test-time augmentation
-- **Optimization**: 
-  - One Cycle learning rate
-  - Mixed precision training
-  - Stochastic Weight Averaging
-  - Curriculum learning
+### Using the Web Application
 
-## Results
+The project includes a Streamlit web application for easy use:
 
-The model achieves high accuracy through:
-- Quality-aware training
-- Ensemble predictions
-- Advanced validation strategy
+```bash
+# On Windows
+run_app.bat
+
+# OR using Python
+python app/run_app.py
+```
+
+The app will be available at http://localhost:8502 in your web browser.
+
+### Training a Model
+
+To train a custom model:
+
+```bash
+python scripts/train.py --config config.yaml
+```
+
+## 📱 Web Application
+
+The Streamlit web app provides a user-friendly interface for:
+
+1. **Uploading Images**: Upload two low-resolution satellite images
+2. **Preprocessing**: Automatic alignment and registration of images
+3. **Super-Resolution**: Generate high-resolution output using the dual-encoder GAN
+4. **Quality Evaluation**: Compute and display blind quality metrics
+5. **Results Download**: Download the enhanced image and quality report
+
+### Using the App
+
+1. Upload two low-resolution satellite images using the file upload widgets
+2. The app will automatically align and preprocess the images
+3. Click "Generate Super-Resolution Image" to process the images
+4. View the results in the "Results & Evaluation" tab
+5. Download the super-resolution image and quality report
+
+## 🧠 Model Architecture
+
+The project uses a dual-encoder GAN model that combines traditional computer vision techniques with deep learning:
+
+- **Dual Encoder**: Processes two aligned low-resolution images to extract complementary features
+- **Attention Fusion**: Combines features from both images with attention mechanisms
+- **GAN Architecture**: Uses a generator-discriminator setup for realistic outputs
+- **Perceptual Loss**: Incorporates VGG-based perceptual loss for better visual quality
+
+### Technical Details
+
+- **Generator**: Dual-encoder U-Net with residual blocks and attention mechanisms
+- **Discriminator**: PatchGAN discriminator for evaluating local and global image quality
+- **Training**: Adversarial training with perceptual and L1 loss components
+- **Upscaling**: Supports 2x and 4x upscaling factors
+
+## 🔧 Optimizations for Maximum Accuracy
+
+The model includes several optimizations to achieve high accuracy:
+
+### Architecture Enhancements
+- Multi-head attention for better feature relationships
+- Multi-scale processing with dilated convolutions
+- Progressive upsampling for better quality
+
+### Advanced Training Strategies
+- Multi-component loss function (L1, MSE, SSIM, Perceptual, Edge, Spectral)
+- Ensemble training with model averaging
 - Test-time augmentation
 
-## License
+### Enhanced Preprocessing
+- Sub-pixel registration with quadratic interpolation
+- Advanced quality assessment with multi-factor quality masks
+- Cloud and motion blur detection
+- Noise assessment and edge consistency checking
 
-This project is licensed under the MIT License - see the LICENSE file for details. 
+## 📁 Repository Structure
+
+```
+.
+├── app/                # Streamlit web application
+│   ├── app.py          # Main Streamlit app
+│   ├── flowchart.png   # Process flowchart
+│   ├── run_app.py      # App runner script
+│   └── assets/         # Static assets
+├── data/               # Data directory
+│   └── raw/            # Raw satellite images
+├── docs/               # Documentation
+│   └── ACCURACY_OPTIMIZATIONS.md  # Detailed optimization docs
+├── isro_sr/            # Main package
+│   ├── data/           # Data handling modules
+│   ├── models/         # ML model implementations
+│   └── utils/          # Utility functions
+├── models/             # Saved model weights
+├── scripts/            # Training and evaluation scripts
+├── config.yaml         # Configuration file
+├── requirements.txt    # Python dependencies
+├── run_app.bat         # Windows batch file to run the app
+└── setup.py            # Package setup file
+```
+
+## 🔍 Advanced Usage
+
+### Custom Configuration
+
+Edit `config.yaml` to customize:
+- Model architecture parameters
+- Training hyperparameters
+- Data augmentation settings
+- Evaluation metrics
+
+### Hardware Requirements
+
+- **Memory**: Minimum 8GB GPU memory recommended for training
+- **Disk Space**: ~50GB for checkpoints and logs
+- **Processing**: Multi-core CPU recommended for preprocessing
+
+## 👥 Credits and License
+
+Developed by the ISRO Satellite Image Super-Resolution Team.
+
+© 2023 ISRO - All Rights Reserved 

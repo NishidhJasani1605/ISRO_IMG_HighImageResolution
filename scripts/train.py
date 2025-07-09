@@ -21,8 +21,9 @@ from kornia.metrics import ssim
 from torch.optim.lr_scheduler import OneCycleLR, CosineAnnealingLR, ReduceLROnPlateau
 from torch.optim.swa_utils import AveragedModel, SWALR, update_bn
 
-from models.transformer_sr import SatelliteSR, CustomLoss
-from data.probav_dataset import create_probav_dataloaders
+# Import from our package
+from isro_sr.models.transformer_sr import SatelliteSR, CustomLoss
+from isro_sr.data.probav_dataset import create_probav_dataloaders
 
 # Load environment variables
 load_dotenv()

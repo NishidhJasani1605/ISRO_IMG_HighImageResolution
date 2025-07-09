@@ -1,8 +1,9 @@
 data:
-  root_dir: "probav_data"
-  train_dir: "train"
-  test_dir: "test"
-  norm_file: "norm.csv"
+  root_dir: "data/raw"
+  train_hr_dir: "train_hr"
+  train_lr_dir: "train_lr"
+  processed_dir: "data/processed"
+  norm_file: "data/processed/norm.csv"
   patch_size: 256  # Larger patches for better context
   scale_factor: 3
   batch_size: 4  # Reduced for larger patches and model
